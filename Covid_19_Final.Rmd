@@ -1,0 +1,153 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Description of Data
+
+The dataset used is published by John Hopkins University and is posted on Github. The files used are part of a larger set of summary tables and provides time series data regarding COVID19 cases. Record keeping ended on March 10, 2023, but was updated daily until that point. More information including source organizations can be found here:https://github.com/CSSEGISandData/COVID-19/blob/master/README.md
+
+## Analysis Questions
+My analysis was based on two questions. What was the death per case rate over time in the US, and how does that compare to some of our nearest neighbors? To answer this question I will first model the data in a way that shows deather per case over time specifically in for the countries of the US and Mexico. Then I will plot the data on two time-series visualizations. 
+
+## Construct Model
+**Import Packages**
+
+```{r libraries}
+# Add libraries
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
+**Import the Data**
+
+```{r COVID-19 github urls, echo=FALSE}
+urls = c(
+  "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
+  "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv",   
+"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv",   
+"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"    
+)
+
+```
+```{r }
+global_cases = read_csv(urls[1])
+global_deaths = read_csv(urls[2])
+
+```
+```{r }
+head(global_cases)
+head(global_deaths)
+
+```
+
+
+**Tidy Data**
+
+```{r tidy, message = FALSE}
+
+covid_global_deaths = global_deaths %>% 
+  pivot_longer(cols = 13:ncol(global_deaths), names_to = "date") %>%
+  group_by(`Province/State`, `Country/Region`, date) %>%
+  summarise("cumulative_deaths" = sum(value, na.rm = TRUE), .groups = 'drop')
+
+covid_global_cases = global_cases %>% 
+  pivot_longer(cols = 13:ncol(global_cases), names_to = "date") %>%
+  group_by(`Province/State`, `Country/Region`, date) %>%
+  summarise("cumulative_cases" = sum(value, na.rm = TRUE), .groups = 'drop')
+
+
+covid_global_deaths$date = lubridate::mdy(covid_global_deaths$date)
+covid_global_cases$date = lubridate::mdy(covid_global_cases$date)
+
+
+head(covid_global_deaths)
+head(covid_global_cases)
+```
+**Focusing Data**
+
+```{r merge global cases and deaths}
+covid_global_deaths = covid_global_deaths %>% 
+  rename_at('Province/State', ~'State') %>%
+  rename_at('Country/Region', ~'Country')
+
+covid_global_cases = covid_global_cases %>% 
+  rename_at('Province/State', ~'State') %>%
+  rename_at('Country/Region', ~'Country')
+
+merged_data = merge(x=covid_global_deaths, y=covid_global_cases, all.x=TRUE)
+
+us <- merged_data[merged_data$Country == "US", ]
+mx <- merged_data[merged_data$Country == "Mexico", ]
+
+us_data <- us %>% select(-State)
+mx_data <- mx %>% select(-State)
+
+# View first several lines of each data set
+
+head(us_data)
+head(mx_data)
+
+```
+
+
+
+
+**Visualizations**
+
+```{r}
+
+# Calculate deaths per case with a check for division by zero
+us_data$deaths_per_case <- ifelse(us_data$cumulative_cases > 0,
+                                   us_data$cumulative_deaths /us_data$cumulative_cases,
+                                   0)
+mx_data$deaths_per_case <- ifelse(mx_data$cumulative_cases > 0,
+                                   mx_data$cumulative_deaths / mx_data$cumulative_cases,
+                                   0)
+
+
+ggplot(us_data, aes(x = date, y = deaths_per_case)) +
+  geom_line() +
+  labs(title = "Deaths per Case Over Time - US",
+       x = "Date",
+       y = "Deaths per Case") +
+  theme_minimal()
+
+
+ggplot(mx_data, aes(x = date, y = deaths_per_case)) +
+  geom_line() +
+  labs(title = "Deaths per Case Over Time - Mexico",
+       x = "Date",
+       y = "Deaths per Case") +
+  theme_minimal()
+
+
+
+combined_df <- rbind(transform(mx_data, dataset = "mx_data"),
+                    transform(us_data, dataset = "us_data"))
+
+
+
+ggplot(combined_df, aes(x = date, y = deaths_per_case, linetype = dataset, color = Country)) +
+  geom_line() +
+  labs(title = "Deaths per Case Over Time",
+       x = "Date",
+       y = "Deaths per Case",
+       color = "Country") +
+  theme_minimal()
+
+```
+##Analysis
+
+My hypothesis that the US would have a better survival rate was correct, but what surprised me was how slowly the survival rate in Mexico is improving. As treatments and knowledge surrounding COVID-19 have improved, so has the survival rate in both countries. The initial spike in death rate in the US is eye-grabbing, but is likely due to a low sample size as total cases is not being taken into account in this analysis. 
+
+Bias within this analysis is possible for a few reasons. First is bias during data gathering. There are different organizations responsible for recording this data in every state of the US, as well as in Mexico. It is possible that a difference in policies has produced bias between different regions. Another point to keep in mind is that no context is provided (within this analysis) of overall cases. The aforementioned spike in the US at the onset of covid is a good example of why this is important to remember. 
+
+ 
+
+
+
