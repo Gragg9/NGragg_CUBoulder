@@ -1,2 +1,2 @@
 # NGragg_CUBoulder
-CU Boulder Projecst
+CU Boulder Projects 
